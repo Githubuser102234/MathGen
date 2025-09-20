@@ -6,29 +6,33 @@
     <title>AI Math Problem Generator</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script type="module">
-        // Global variables provided by the environment
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
-        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
-        
         // Firebase SDKs
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, collection, query, orderBy, onSnapshot, addDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-app.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-auth.js";
+        import { getFirestore, doc, collection, query, orderBy, onSnapshot, addDoc } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-firestore.js";
+        
+        // Your Firebase web app's configuration
+        const firebaseConfig = {
+            apiKey: "AIzaSyCj4XF8ACtpEByOMWr1qgeECUGpmDUvdHM",
+            authDomain: "mathgen-9ee8f.firebaseapp.com",
+            projectId: "mathgen-9ee8f",
+            storageBucket: "mathgen-9ee8f.firebasestorage.app",
+            messagingSenderId: "202675375934",
+            appId: "1:202675375934:web:567f9528d26c75a2bea66f",
+            measurementId: "G-9V3DK2F7DT"
+        };
+        const appId = "1:202675375934:web:567f9528d26c75a2bea66f"; // Hardcoded appId
         
         let app, db, auth, userId;
 
         window.addEventListener('DOMContentLoaded', async (event) => {
             // Initialize Firebase and Auth
             try {
-                if (Object.keys(firebaseConfig).length === 0) {
-                    throw new Error("Firebase config is missing. Cannot initialize app.");
-                }
                 app = initializeApp(firebaseConfig);
                 auth = getAuth(app);
                 db = getFirestore(app);
-
-                // Sign in with custom token or anonymously
+                
+                // Sign in anonymously and set up listener
                 onAuthStateChanged(auth, async (user) => {
                     if (user) {
                         userId = user.uid;
@@ -41,19 +45,12 @@
                     }
                 });
 
-                if (initialAuthToken) {
-                    console.log("Using initial auth token for sign-in.");
-                    await signInWithCustomToken(auth, initialAuthToken);
-                } else {
-                    console.log("No initial auth token found.");
-                }
-
                 // Add event listeners for UI interactions
                 document.getElementById('generate-btn').addEventListener('click', generateProblem);
                 document.getElementById('check-btn').addEventListener('click', checkAnswer);
                 document.getElementById('hamburger-btn').addEventListener('click', toggleSidebar);
                 document.getElementById('overlay').addEventListener('click', toggleSidebar);
-
+                
             } catch (e) {
                 console.error("Error initializing app:", e);
                 document.getElementById('status').textContent = `Initialization Error: ${e.message}`;
