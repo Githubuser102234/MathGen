@@ -9,7 +9,8 @@
         // Firebase SDKs
         import { initializeApp } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-app.js";
         import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-auth.js";
-        import { getFirestore, doc, collection, query, orderBy, onSnapshot, addDoc } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-firestore.js";
+        import { getFirestore, collection, query, orderBy, onSnapshot, addDoc } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-firestore.js";
+        import { getAI, getGenerativeModel, GoogleAIBackend } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-ai.js";
         
         // Your Firebase web app's configuration
         const firebaseConfig = {
@@ -23,11 +24,7 @@
         };
         const appId = "1:202675375934:web:567f9528d26c75a2bea66f"; // Hardcoded appId
         
-        // Gemini API configuration
-        const apiKey = "";
-        const geminiApiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
-
-        let app, db, auth, userId;
+        let app, db, auth, userId, model;
 
         window.addEventListener('DOMContentLoaded', async (event) => {
             // Initialize Firebase and Auth
@@ -36,6 +33,10 @@
                 auth = getAuth(app);
                 db = getFirestore(app);
                 
+                // Initialize the Gemini Developer API backend service
+                const ai = getAI(app, { backend: new GoogleAIBackend() });
+                model = getGenerativeModel(ai, { model: "gemini-2.5-flash" });
+
                 // Sign in anonymously and set up listener
                 onAuthStateChanged(auth, async (user) => {
                     if (user) {
@@ -132,7 +133,7 @@
             }
         }
 
-        // --- Core Math Generation Logic (Remains similar, with Firestore integration) ---
+        // --- Core Math Generation Logic ---
         let correctAnswer = '';
         const problemInput = document.getElementById('problem');
         const answerInput = document.getElementById('answer');
@@ -150,41 +151,12 @@
             const prompt = "Generate a single-line simple high-school level math problem. The problem should not involve fractions or decimals. The problem must have a unique numerical answer. Do not include the answer in the problem. Respond with only the problem text.";
 
             try {
-                const response = await fetch(geminiApiUrl, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        contents: [{ parts: [{ text: prompt }] }],
-                        generationConfig: {
-                            responseMimeType: "text/plain"
-                        }
-                    })
-                });
-
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
-                const result = await response.json();
-                const problemText = result.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || "Failed to generate problem.";
+                const problemResult = await model.generateContent(prompt);
+                const problemText = problemResult.response?.text?.().trim() || "Failed to generate problem.";
                 
-                // Now get the answer
                 const answerPrompt = `Solve the following math problem. Only provide the final numerical answer, nothing else. Do not show your work. Problem: ${problemText}`;
-                const answerResponse = await fetch(geminiApiUrl, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        contents: [{ parts: [{ text: answerPrompt }] }],
-                        generationConfig: {
-                            responseMimeType: "text/plain"
-                        }
-                    })
-                });
-
-                if (!answerResponse.ok) {
-                    throw new Error(`HTTP error! status: ${answerResponse.status}`);
-                }
-                const answerResult = await answerResponse.json();
-                correctAnswer = answerResult.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || "";
+                const answerResult = await model.generateContent(answerPrompt);
+                correctAnswer = answerResult.response?.text?.().trim() || "";
                 
                 // Set the problem text, clear the answer, and update UI
                 problemInput.value = problemText;
