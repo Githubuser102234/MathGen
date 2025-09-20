@@ -9,7 +9,7 @@
         // Firebase SDKs
         import { initializeApp } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-app.js";
         import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-auth.js";
-        import { getFirestore, collection, query, orderBy, onSnapshot, addDoc } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-firestore.js";
+        import { getFirestore, collection, query, onSnapshot, addDoc } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-firestore.js";
         import { getAI, getGenerativeModel, GoogleAIBackend } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-ai.js";
         
         // Your Firebase web app's configuration
@@ -80,7 +80,7 @@
             }
             const historyList = document.getElementById('history-list');
             const userHistoryRef = collection(db, `artifacts/${appId}/users/${userId}/mathProblems`);
-            const q = query(userHistoryRef, orderBy('timestamp', 'desc'));
+            const q = query(userHistoryRef);
 
             onSnapshot(q, (snapshot) => {
                 historyList.innerHTML = '';
@@ -88,10 +88,17 @@
                     historyList.innerHTML = '<p class="text-sm text-gray-400 p-4">No history yet.</p>';
                     return;
                 }
+                const historyItems = [];
                 snapshot.forEach((doc) => {
-                    const data = doc.data();
+                    historyItems.push(doc.data());
+                });
+                
+                // Client-side sorting by timestamp, since Firestore doesn't support 'orderBy' without an index
+                historyItems.sort((a, b) => b.timestamp.toMillis() - a.timestamp.toMillis());
+
+                historyItems.forEach((data) => {
                     const item = document.createElement('div');
-                    item.className = 'border-b border-gray-600 last:border-b-0 p-4';
+                    item.className = 'border-b border-gray-600 last:border-b-0 p-4 cursor-pointer hover:bg-gray-700 transition-colors duration-200';
                     item.innerHTML = `
                         <p class="text-gray-200 text-sm font-semibold">${data.problem}</p>
                         <p class="text-gray-400 text-xs mt-1">Your answer: <span class="${data.isCorrect ? 'text-green-400' : 'text-red-400'}">${data.userAnswer}</span></p>
@@ -99,10 +106,11 @@
                     `;
                     item.addEventListener('click', () => {
                         document.getElementById('problem').value = data.problem;
-                        document.getElementById('answer').value = '';
-                        document.getElementById('correct-answer-display').textContent = data.correctAnswer;
+                        document.getElementById('answer').value = data.userAnswer;
+                        document.getElementById('correct-answer-display').textContent = `Correct answer: ${data.correctAnswer}`;
                         document.getElementById('result').textContent = `This was ${data.isCorrect ? 'Correct' : 'Incorrect'}.`;
-                        document.getElementById('result').className = `mt-4 p-2 rounded-lg text-center ${data.isCorrect ? 'bg-green-600 text-white' : 'bg-red-600 text-white'}`;
+                        document.getElementById('result').className = `mt-4 p-2 rounded-lg text-center font-bold ${data.isCorrect ? 'bg-green-600 text-white' : 'bg-red-600 text-white'}`;
+                        document.getElementById('result').classList.remove('hidden');
                         toggleSidebar();
                     });
                     historyList.appendChild(item);
@@ -148,7 +156,10 @@
             resultDisplay.classList.add('hidden');
             document.getElementById('correct-answer-display').textContent = '';
 
-            const prompt = "Generate a single-line simple high-school level math problem. The problem should not involve fractions or decimals. The problem must have a unique numerical answer. Do not include the answer in the problem. Respond with only the problem text.";
+            const gradeLevel = document.getElementById('grade-level').value;
+            const mathType = document.getElementById('math-type').value;
+
+            const prompt = `Generate a single-line simple ${gradeLevel} math problem in the field of ${mathType}. The problem should not involve fractions or decimals. The problem must have a unique numerical answer. Do not include the answer in the problem. Respond with only the problem text.`;
 
             try {
                 const problemResult = await model.generateContent(prompt);
@@ -228,6 +239,39 @@
         </header>
 
         <main class="w-full max-w-2xl bg-gray-800 p-8 rounded-3xl shadow-2xl flex flex-col space-y-6 border border-gray-700">
+            <!-- New: Grade and Type Selectors -->
+            <div class="flex flex-col sm:flex-row space-y-4 sm:space-y-0 sm:space-x-4">
+                <div class="flex-1">
+                    <label for="grade-level" class="text-sm font-semibold text-gray-400">Grade Level:</label>
+                    <select id="grade-level" class="mt-1 w-full p-3 bg-gray-700 rounded-xl text-gray-200 focus:outline-none focus:ring-2 focus:ring-teal-500">
+                        <option value="1st Grade">1st Grade</option>
+                        <option value="2nd Grade">2nd Grade</option>
+                        <option value="3rd Grade">3rd Grade</option>
+                        <option value="4th Grade">4th Grade</option>
+                        <option value="5th Grade">5th Grade</option>
+                        <option value="6th Grade">6th Grade</option>
+                        <option value="7th Grade">7th Grade</option>
+                        <option value="8th Grade">8th Grade</option>
+                        <option value="9th Grade">9th Grade</option>
+                        <option value="10th Grade">10th Grade</option>
+                        <option value="11th Grade">11th Grade</option>
+                        <option value="12th Grade" selected>12th Grade</option>
+                    </select>
+                </div>
+                <div class="flex-1">
+                    <label for="math-type" class="text-sm font-semibold text-gray-400">Math Type:</label>
+                    <select id="math-type" class="mt-1 w-full p-3 bg-gray-700 rounded-xl text-gray-200 focus:outline-none focus:ring-2 focus:ring-teal-500">
+                        <option value="Arithmetic">Arithmetic</option>
+                        <option value="Algebra" selected>Algebra</option>
+                        <option value="Geometry">Geometry</option>
+                        <option value="Trigonometry">Trigonometry</option>
+                        <option value="Calculus">Calculus</option>
+                        <option value="Statistics">Statistics</option>
+                        <option value="Word Problems">Word Problems</option>
+                    </select>
+                </div>
+            </div>
+
             <div class="flex flex-col space-y-4">
                 <label for="problem" class="text-lg font-semibold text-gray-200">Math Problem:</label>
                 <textarea id="problem" rows="3" class="w-full p-4 bg-gray-700 rounded-xl text-lg text-gray-100 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-teal-500 resize-none" placeholder="Click 'Generate' to get a new problem." readonly></textarea>
