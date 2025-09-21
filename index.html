@@ -9,7 +9,7 @@
         // Firebase SDKs
         import { initializeApp } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-app.js";
         import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-auth.js";
-        import { getFirestore, collection, query, onSnapshot, addDoc } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-firestore.js";
+        import { getFirestore, collection, query, onSnapshot, addDoc, getDoc, doc } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-firestore.js";
         import { getAI, getGenerativeModel, GoogleAIBackend } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-ai.js";
         
         // Your Firebase web app's configuration
@@ -25,6 +25,7 @@
         const appId = "1:202675375934:web:567f9528d26c75a2bea66f"; // Hardcoded appId
         
         let app, db, auth, userId, model;
+        let problemHistory = {}; // Cache to store problem data for quick lookup
 
         window.addEventListener('DOMContentLoaded', async (event) => {
             // Initialize Firebase and Auth
@@ -49,6 +50,10 @@
                         await signInAnonymously(auth);
                     }
                 });
+
+                // Set up routing
+                window.addEventListener('hashchange', loadProblemFromUrl);
+                loadProblemFromUrl(); // Initial load check
 
                 // Add event listeners for UI interactions
                 document.getElementById('generate-btn').addEventListener('click', generateProblem);
@@ -89,33 +94,77 @@
                     return;
                 }
                 const historyItems = [];
+                problemHistory = {}; // Clear cache
                 snapshot.forEach((doc) => {
-                    historyItems.push(doc.data());
+                    const data = { id: doc.id, ...doc.data() };
+                    historyItems.push(data);
+                    problemHistory[data.id] = data;
                 });
                 
-                // Client-side sorting by timestamp, since Firestore doesn't support 'orderBy' without an index
+                // Client-side sorting by timestamp
                 historyItems.sort((a, b) => b.timestamp.toMillis() - a.timestamp.toMillis());
 
                 historyItems.forEach((data) => {
-                    const item = document.createElement('div');
-                    item.className = 'border-b border-gray-600 last:border-b-0 p-4 cursor-pointer hover:bg-gray-700 transition-colors duration-200';
+                    const item = document.createElement('a');
+                    item.href = `#/history/${data.id}`;
+                    item.className = 'block border-b border-gray-600 last:border-b-0 p-4 cursor-pointer hover:bg-gray-700 transition-colors duration-200';
                     item.innerHTML = `
                         <p class="text-gray-200 text-sm font-semibold">${data.problem}</p>
                         <p class="text-gray-400 text-xs mt-1">Your answer: <span class="${data.isCorrect ? 'text-green-400' : 'text-red-400'}">${data.userAnswer}</span></p>
-                        <p class="text-gray-400 text-xs">Correct answer: <span class="text-green-400">${data.correctAnswer}</span></p>
                     `;
-                    item.addEventListener('click', () => {
-                        document.getElementById('problem').value = data.problem;
-                        document.getElementById('answer').value = data.userAnswer;
-                        document.getElementById('correct-answer-display').textContent = `Correct answer: ${data.correctAnswer}`;
-                        document.getElementById('result').textContent = `This was ${data.isCorrect ? 'Correct' : 'Incorrect'}.`;
-                        document.getElementById('result').className = `mt-4 p-2 rounded-lg text-center font-bold ${data.isCorrect ? 'bg-green-600 text-white' : 'bg-red-600 text-white'}`;
-                        document.getElementById('result').classList.remove('hidden');
-                        toggleSidebar();
-                    });
                     historyList.appendChild(item);
                 });
             });
+        }
+
+        // Function to load a specific problem from URL hash
+        async function loadProblemFromUrl() {
+            const hash = window.location.hash;
+            if (hash.startsWith('#/history/')) {
+                const problemId = hash.substring('#/history/'.length);
+                const problemData = problemHistory[problemId];
+                if (problemData) {
+                    displayProblem(problemData);
+                } else {
+                    // If not in cache, fetch from Firestore
+                    try {
+                        const docRef = doc(db, `artifacts/${appId}/users/${userId}/mathProblems`, problemId);
+                        const docSnap = await getDoc(docRef);
+                        if (docSnap.exists()) {
+                            displayProblem({ id: docSnap.id, ...docSnap.data() });
+                        } else {
+                            clearProblemDisplay();
+                            document.getElementById('status').textContent = 'Error: Problem not found.';
+                            document.getElementById('status').classList.remove('hidden');
+                        }
+                    } catch (e) {
+                        clearProblemDisplay();
+                        document.getElementById('status').textContent = `Error loading problem: ${e.message}`;
+                        document.getElementById('status').classList.remove('hidden');
+                        console.error("Error fetching single doc:", e);
+                    }
+                }
+            } else {
+                clearProblemDisplay();
+            }
+        }
+
+        function displayProblem(data) {
+            document.getElementById('problem').value = data.problem;
+            document.getElementById('answer').value = data.userAnswer;
+            document.getElementById('correct-answer-display').textContent = `Correct answer: ${data.correctAnswer}`;
+            document.getElementById('result').textContent = `This was ${data.isCorrect ? 'Correct' : 'Incorrect'}.`;
+            document.getElementById('result').className = `mt-4 p-2 rounded-lg text-center font-bold ${data.isCorrect ? 'bg-green-600 text-white' : 'bg-red-600 text-white'}`;
+            document.getElementById('result').classList.remove('hidden');
+            toggleSidebar();
+        }
+
+        function clearProblemDisplay() {
+            document.getElementById('problem').value = '';
+            document.getElementById('answer').value = '';
+            document.getElementById('correct-answer-display').textContent = '';
+            document.getElementById('result').textContent = '';
+            document.getElementById('result').classList.add('hidden');
         }
 
         // Function to save problem history to Firestore
