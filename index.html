@@ -52,7 +52,7 @@
                 });
 
                 // Set up routing
-                window.addEventListener('hashchange', loadProblemFromUrl);
+                window.addEventListener('popstate', loadProblemFromUrl);
                 loadProblemFromUrl(); // Initial load check
 
                 // Add event listeners for UI interactions
@@ -106,22 +106,27 @@
 
                 historyItems.forEach((data) => {
                     const item = document.createElement('a');
-                    item.href = `#/history/${data.id}`;
+                    item.href = `/history/${data.id}`;
                     item.className = 'block border-b border-gray-600 last:border-b-0 p-4 cursor-pointer hover:bg-gray-700 transition-colors duration-200';
                     item.innerHTML = `
                         <p class="text-gray-200 text-sm font-semibold">${data.problem}</p>
                         <p class="text-gray-400 text-xs mt-1">Your answer: <span class="${data.isCorrect ? 'text-green-400' : 'text-red-400'}">${data.userAnswer}</span></p>
                     `;
+                    item.addEventListener('click', (e) => {
+                        e.preventDefault();
+                        history.pushState(null, '', item.href);
+                        loadProblemFromUrl();
+                    });
                     historyList.appendChild(item);
                 });
             });
         }
 
-        // Function to load a specific problem from URL hash
+        // Function to load a specific problem from URL path
         async function loadProblemFromUrl() {
-            const hash = window.location.hash;
-            if (hash.startsWith('#/history/')) {
-                const problemId = hash.substring('#/history/'.length);
+            const path = window.location.pathname;
+            if (path.startsWith('/history/')) {
+                const problemId = path.substring('/history/'.length);
                 const problemData = problemHistory[problemId];
                 if (problemData) {
                     displayProblem(problemData);
@@ -350,3 +355,4 @@
 
 </body>
 </html>
+
