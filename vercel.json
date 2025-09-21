@@ -1,7 +1,7 @@
 {
 "rewrites": [
 {
-"source": "/history/:path*",
+"source": "/(.*)",
 "destination": "/index.html"
 }
 ]
